@@ -1,0 +1,22 @@
+name = "omnichat-saas"
+compatibility_date = "2023-12-01"
+
+[vars]
+APP_URL = "https://your-domain.com"
+
+[env.production]
+vars = { APP_URL = "https://omnichat.yourdomain.com" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "omnichat-db"
+database_id = "your-database-id"
+
+[secrets]
+SUPABASE_URL
+SUPABASE_SERVICE_KEY
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_STARTER_PRICE_ID
+STRIPE_PRO_PRICE_ID
+STRIPE_AGENCY_PRICE_ID
