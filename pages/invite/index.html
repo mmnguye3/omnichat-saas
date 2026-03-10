@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accept Invitation - OmniChat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { max-width: 450px; width: 100%; padding: 20px; }
+    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; }
+    .logo { font-size: 48px; margin-bottom: 16px; }
+    h1 { color: #1a1a2e; margin-bottom: 8px; font-size: 24px; }
+    h2 { color: #333; margin-bottom: 16px; font-size: 20px; }
+    p { color: #666; margin-bottom: 12px; line-height: 1.5; }
+    .info-box { background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: left; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-label { color: #666; font-size: 14px; }
+    .info-value { font-weight: 500; }
+    button { background: #4f46e5; color: white; border: none; padding: 14px 24px; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.2s; width: 100%; }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-secondary { background: #6b7280; margin-top: 12px; }
+    .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .success { background: #d1fae5; color: #065f46; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #4f46e5; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin: 0 auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">💬</div>
+      <h1>OmniChat</h1>
+      <div id="content">
+        <div class="spinner"></div>
+        <p style="margin-top:16px;">Loading invitation...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+    const token = localStorage.getItem('token');
+    const inviteToken = window.location.pathname.split('/invite/')[1];
+    
+    async function loadInvitation() {
+      const content = document.getElementById('content');
+      
+      if (!inviteToken) {
+        content.innerHTML = '<div class="error">Invalid invitation link</div>';
+        return;
+      }
+      
+      try {
+        const res = await fetch(`${API}/api/invitations/${inviteToken}`);
+        const data = await res.json();
+        
+        if (!res.ok) {
+          content.innerHTML = `<div class="error">${data.error}</div>`;
+          return;
+        }
+        
+        const inv = data.invitation;
+        
+        content.innerHTML = `
+          <h2>You're invited!</h2>
+          <p>You've been invited to join <strong>${inv.workspace_name}</strong> as a <strong>${inv.role}</strong>.</p>
+          <div class="info-box">
+            <div class="info-row">
+              <span class="info-label">Email:</span>
+              <span class="info-value">${inv.email}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Role:</span>
+              <span class="info-value">${inv.role}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Workspace:</span>
+              <span class="info-value">${inv.workspace_name}</span>
+            </div>
+          </div>
+          <div id="message"></div>
+          ${token ? `
+            <button onclick="acceptInvitation()" id="acceptBtn">Accept Invitation</button>
+            <button class="btn-secondary" onclick="logout()">Logout to accept with different account</button>
+          ` : `
+            <p>Please <a href="/login">login</a> or <a href="/signup">sign up</a> to accept this invitation.</p>
+            <p style="font-size:13px;">Make sure you use the email address: <strong>${inv.email}</strong></p>
+          `}
+        `;
+      } catch (err) {
+        content.innerHTML = `<div class="error">Failed to load invitation</div>`;
+      }
+    }
+    
+    async function acceptInvitation() {
+      const btn = document.getElementById('acceptBtn');
+      const message = document.getElementById('message');
+      
+      btn.disabled = true;
+      btn.textContent = 'Accepting...';
+      
+      try {
+        const res = await fetch(`${API}/api/invitations/${inviteToken}/accept`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          message.innerHTML = `<div class="error">${data.error}</div>`;
+          btn.disabled = false;
+          btn.textContent = 'Accept Invitation';
+          return;
+        }
+        
+        message.innerHTML = '<div class="success">Invitation accepted! Redirecting...</div>';
+        
+        // Redirect to workspace/dashboard
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 1500);
+      } catch (err) {
+        message.innerHTML = '<div class="error">Failed to accept invitation</div>';
+        btn.disabled = false;
+        btn.textContent = 'Accept Invitation';
+      }
+    }
+    
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    
+    loadInvitation();
+  </script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invite Admin - OmniChat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; }
+    .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .header h1 { color: #1a1a2e; }
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card h2 { margin-bottom: 20px; color: #333; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; font-weight: 500; color: #555; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    input:focus, select:focus { outline: none; border-color: #4f46e5; }
+    button { background: #4f46e5; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-secondary { background: #6b7280; }
+    .btn-secondary:hover { background: #4b5563; }
+    .btn-danger { background: #ef4444; }
+    .btn-danger:hover { background: #dc2626; }
+    .invitation-link { background: #f3f4f6; padding: 12px; border-radius: 8px; margin-top: 12px; word-break: break-all; font-family: monospace; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { font-weight: 600; color: #555; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-accepted { background: #d1fae5; color: #065f46; }
+    .badge-expired { background: #fee2e2; color: #991b1b; }
+    .empty { text-align: center; color: #999; padding: 40px; }
+    .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .success { background: #d1fae5; color: #065f46; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>👑 Super Admin</h1>
+      <button class="btn-secondary" onclick="logout()">Logout</button>
+    </div>
+    
+    <div class="card">
+      <h2>Invite New Admin</h2>
+      <div id="error"></div>
+      <div id="success"></div>
+      <form id="inviteForm">
+        <div class="form-group">
+          <label>Admin Email</label>
+          <input type="email" id="email" required placeholder="admin@example.com">
+        </div>
+        <div class="form-group">
+          <label>Workspace</label>
+          <select id="workspace" required>
+            <option value="">Select workspace...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select id="role">
+            <option value="admin">Admin</option>
+            <option value="member">Member (Employee)</option>
+          </select>
+        </div>
+        <button type="submit" id="submitBtn">Send Invitation</button>
+      </form>
+      <div id="inviteResult" style="display:none;">
+        <p>Invitation link (share with user):</p>
+        <div class="invitation-link" id="linkContainer"></div>
+        <button class="btn-secondary" onclick="copyLink()" style="margin-top:12px;">Copy Link</button>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2>Pending Invitations</h2>
+      <table id="invitationsTable">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="invitationsBody">
+          <tr><td colspan="4" class="empty">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+    let token = localStorage.getItem('token');
+    
+    if (!token) {
+      window.location.href = '/login';
+    }
+    
+    async function loadWorkspaces() {
+      const res = await fetch(`${API}/api/workspaces`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const select = document.getElementById('workspace');
+      data.forEach(ws => {
+        const opt = document.createElement('option');
+        opt.value = ws.id;
+        opt.textContent = ws.name;
+        select.appendChild(opt);
+      });
+    }
+    
+    async function loadInvitations() {
+      const res = await fetch(`${API}/api/super-admin/invitations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.status === 403) {
+        document.getElementById('invitationsBody').innerHTML = '<tr><td colspan="4" class="empty">Access denied. Super admin only.</td></tr>';
+        return;
+      }
+      const { invitations } = await res.json();
+      const tbody = document.getElementById('invitationsBody');
+      if (!invitations?.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No invitations yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = invitations.map(inv => `
+        <tr>
+          <td>${inv.email}</td>
+          <td>${inv.role}</td>
+          <td><span class="badge badge-${inv.status}">${inv.status}</span></td>
+          <td>${new Date(inv.created_at).toLocaleDateString()}</td>
+        </tr>
+      `).join('');
+    }
+    
+    document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      
+      const email = document.getElementById('email').value;
+      const workspace_id = document.getElementById('workspace').value;
+      const role = document.getElementById('role').value;
+      
+      try {
+        const res = await fetch(`${API}/api/super-admin/invite`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ email, workspace_id, role })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to send invitation');
+        }
+        
+        document.getElementById('success').innerHTML = '<div class="success">Invitation sent!</div>';
+        document.getElementById('linkContainer').textContent = data.invitation_link;
+        document.getElementById('inviteResult').style.display = 'block';
+        loadInvitations();
+      } catch (err) {
+        document.getElementById('error').innerHTML = `<div class="error">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send Invitation';
+      }
+    });
+    
+    function copyLink() {
+      const link = document.getElementById('linkContainer').textContent;
+      navigator.clipboard.writeText(link);
+      alert('Copied!');
+    }
+    
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    
+    loadWorkspaces();
+    loadInvitations();
+  </script>
+</body>
+</html>
